@@ -1,0 +1,8 @@
+/**:
+  kt_server_client_node:
+    ros__parameters:
+      robot_serial: "RSN800-0000"
+      client_id: "snsolutions"
+      client_secret: "QgvVztMwFggaC3Ds1nDCgIXec9P5Ca84"
+      robot_status_report_hz: 1
+      verbose: true

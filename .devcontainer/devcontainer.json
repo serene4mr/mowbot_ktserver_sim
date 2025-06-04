@@ -1,0 +1,19 @@
+{
+    "name": "mowbot_legacy_dev",
+    "image": "ghcr.io/serene4mr/mowbot_legacy",
+    "runArgs": [
+        "--name", "mowbot_legacy_ktserver",
+        "--net", "host",
+        "--privileged",
+        "-v", "/dev:/dev",
+        "-v", "/tmp/.X11-unix:/tmp/.X11-unix",
+        "-e", "DISPLAY"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    }
+  }
