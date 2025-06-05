@@ -4,5 +4,5 @@
       robot_serial: "RSN800-0000"
       client_id: "snsolutions"
       client_secret: "QgvVztMwFggaC3Ds1nDCgIXec9P5Ca84"
-      robot_status_report_hz: 1
+      robot_status_report_hz: 1.0
       verbose: true

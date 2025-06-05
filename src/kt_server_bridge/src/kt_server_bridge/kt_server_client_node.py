@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 
-from kt_server_bridge.kt_server_client import KTServerClient, DrivingStatus
+from kt_server_bridge.kt_server_client import KTServerClient
 
 from sensor_msgs.msg import NavSatFix, Imu, NavSatStatus
 from nav_msgs.msg import Odometry

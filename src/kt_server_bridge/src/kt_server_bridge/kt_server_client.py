@@ -5,19 +5,17 @@ import pyproj
 from typing import Literal
 from enum import Enum
 
+from kt_server_bridge.schemas.robot_status_schema import (
+    DrivingStatus,
+    AutonomousStatus,
+    RTKStatus,
+)
+from kt_server_bridge.schemas.common_schema import (
+    TaskStatus,
+)
+
 KT_SERVER_TOKEN_URL = "https://biz-dev.ktraas.kt.co.kr/keycloak/realms/openrm/protocol/openid-connect/token"
 KT_SERVER_API_BASE_URL = "https://biz-dev.ktraas.kt.co.kr/kt-pa-open-api/api"
-
-class DrivingStatus(Enum):
-    STANDBY = 0
-    NORMAL_DRIVING = 1
-    NORMAL_DRIVING_COMPLETION = 2
-    CANCELLED = 3
-    OBSTACLE_DETECTED = 4
-    DRIVING_FAILURE = 5
-    ERROR_STOP = 12
-    MANUAL_DRIVING = 16
-    
 
 def get_utm_coordinates(latitude, longitude):
     # Define the source (WGS84) and target (UTM) coordinate systems
@@ -120,14 +118,58 @@ class KTServerClient:
         gps_location: dict,
         speed: float,
         heading: float,
-        rtk_status: Literal["normal", "error"] = "normal",
-        autonomous_status: Literal["Active", "Stopped", "Standby"] = "Stopped",
-        drive_status: Literal[0, 1, 2, 3, 4, 5, 12, 16] = 0,
+        rtk_status: RTKStatus = RTKStatus.NORMAL,
+        autonomous_status: AutonomousStatus = AutonomousStatus.STOPPED,
+        drive_status: DrivingStatus = DrivingStatus.STANDBY,
+        task_status: TaskStatus = TaskStatus.STANDBY
     ):  
         self.check_and_refresh_token()  # Ensure token is valid before sending status
         
-        utm_easting, utm_northing = get_utm_coordinates(gps_location["lat"], gps_location["lon"])
+        utm_easting, utm_northing = get_utm_coordinates(
+            gps_location["lat"], gps_location["lon"]
+        )
         time_now = self.get_current_time_kst()
+        json_data = {
+            "robot_serial": self.robot_serial,
+            "create_time": time_now,  # Current time in the required (KST)format
+            "x": utm_easting,
+            "y": utm_northing,
+            "battery": 10, # fixed
+            "drive_status": drive_status,
+            "speed": int(speed), # Exclude decimal point in the result value.
+            "heading": int(heading), # Exclude decimal point in the result value.
+            "charge": False,
+            "charge_type": "None",
+            "is_indoor": False,
+            "coord_code": "WGS84",
+            "service_mode": "mowing",
+            "service": {
+                "mowing": {
+                    "fuel": 10, # Add fuel sensors later.
+                    "autonomous_status": autonomous_status, # need an update on these 3 driving conditions.("Stopped": 사용불가(정지)"Standby": 준비완료(대기)"Active": 자율작업중(작업중))
+                    "cutter": {
+                        "type": "rotary",
+                        "width": 80
+                    },
+                    "lift": {
+                        "status": "down",
+                        "height": 5
+                    },
+                    "rtk": {
+                        "status": rtk_status, # Change "error" when there is no rtk signal
+                        "error_range": 3
+                    },
+                    "rollangle": 30, # Enter the angle data of the IMU in real time.
+                    "rollover_status": "normal" # Change the "normal" to "error" with printable imu data when the robot is overturned
+                }
+            },
+            "task": {
+                "task_id": f"{self.robot_serial}-{time_now}0101",
+                "task_code": "mowing",
+                "task_status": task_status
+            }
+        }
+        
         try: 
             response = requests.post(
                 self.robot_status_endpoint,  # Fixed URL with robot serial
@@ -135,46 +177,7 @@ class KTServerClient:
                     "Authorization": f"Bearer {self.access_token}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "robot_serial": self.robot_serial,
-                    "create_time": time_now,  # Current time in the required (KST)format
-                    "x": utm_easting,
-                    "y": utm_northing,
-                    "battery": 10, # fixed
-                    "drive_status": drive_status, # Please refer to Excel and update it.(0,1, 2, 3, 4, 5, 12, 16)
-                    "speed": int(speed), # Exclude decimal point in the result value.
-                    "heading": int(heading), # Exclude decimal point in the result value.
-                    "charge": False,
-                    "charge_type": "None",
-                    "is_indoor": False,
-                    "coord_code": "WGS84",
-                    "service_mode": "mowing",
-                    "service": {
-                        "mowing": {
-                            "fuel": 10, # Add fuel sensors later.
-                            "autonomous_status": autonomous_status, # need an update on these 3 driving conditions.("Stopped": 사용불가(정지)"Standby": 준비완료(대기)"Active": 자율작업중(작업중))
-                            "cutter": {
-                                "type": "rotary",
-                                "width": 80
-                            },
-                            "lift": {
-                                "status": "down",
-                                "height": 5
-                            },
-                            "rtk": {
-                                "status": rtk_status, # Change "error" when there is no rtk signal
-                                "error_range": 3
-                            },
-                            "rollangle": 30, # Enter the angle data of the IMU in real time.
-                            "rollover_status": "normal" # Change the "normal" to "error" with printable imu data when the robot is overturned
-                        }
-                    },
-                    "task": {
-                        "task_id": f"{self.robot_serial}-{time_now}0101",
-                        "task_code": "mowing",
-                        "task_status": "OnProgress" # Please refer to Excel and update it.(Standby, Started, DestArrived, OnProgress, End, Cancelled, Failed)
-                    }
-                }
+                json=json_data
             )
             
             if response.status_code == 200:
@@ -188,6 +191,83 @@ class KTServerClient:
         except Exception as e:  
             if self.verbose:
                 self.log_error(f"Error sending robot status: {e}")
+            return False
+        
+        return True
+    
+    def send_mission_info(
+        self,
+        task_status: TaskStatus = TaskStatus.STANDBY,
+        field_boundary: list[dict] = None,  # List of dicts with 'lat' and 'lon' keys
+    ):
+        self.check_and_refresh_token()
+        
+        # convert field_boundary coordinates to UTM if provided
+        if field_boundary:
+            for point in field_boundary:
+                if 'lat' in point and 'lon' in point:
+                    utm_easting, utm_northing = get_utm_coordinates(point['lat'], point['lon'])
+                    point['utm_easting'] = utm_easting
+                    point['utm_northing'] = utm_northing
+                else:
+                    if self.verbose:
+                        self.log_error("Field boundary points must contain 'lat' and 'lon' keys.")
+                    return False
+
+        try:
+            response = requests.post(
+                self.service_status_endpoint, # Fixed URL with robot serial
+                headers= {
+                    "Authorization": f"Bearer {self.access_token}",
+                    "Content-Type": "application/json"
+                },
+                json = {
+                    "robot_serial": self.robot_serial,
+                    "create_time": datetime.now().strftime("%y%m%d%H%M%S%f")[:15],
+                    "mission_code": "ktfarming",
+                    "mission_id": f"{self.robot_serial}-{datetime.now().strftime('%y%m%d%H%M%S%f')[:15]}",
+                    "owner": self.robot_serial,
+                    "task": [
+                        {
+                        "task_id": f"{self.robot_serial}-{datetime.now().strftime('%y%m%d%H%M%S%f')[:15]}0101",
+                            "task_code": "mowing",
+                            "status": task_status,
+                            "seq": 0,
+                            "task_data": {
+                                "map_id": "1", # When map registration is completed later, we will change the data ourselves and apply it. Need to apply the container later.
+                                "report": {
+                                    "time": 300, # Total work time (sec)
+                                    "distance": 15.0, # Total distance traveled between tasks (m)
+                                    "area": 225.0 # Total working area (m^2)
+                                },
+                                "attachment": {
+                                    "cutter": {
+                                        "type": "rotary",
+                                        "width": 80.0
+                                    },
+                                    "lift": {
+                                        "status": "down",
+                                        "height": 5.0
+                                    }
+                                },
+                                "field_boundary": field_boundary if field_boundary else [],
+                            }
+                        }
+                    ]
+                }
+            )       
+
+            if response.status_code == 200:
+                if self.verbose:
+                    self.get_logger().info(f"Mission info sent successfully: {response.json()}")
+            else:
+                if self.verbose:
+                    self.get_logger().error(f"Failed to send mission info: {response.status_code} - {response.text}")
+                return False
+        
+        except Exception as e:  
+            if self.verbose:
+                self.get_logger().error(f"Error sending mission info: {e}")
             return False
         
         return True
