@@ -100,8 +100,8 @@ class KtServerClientSimNode(Node):
         self._last_field_boundary = []
         
     def on_robot_status_timer_callback(self):
-        if self.verbose:
-            self.get_logger().info("Sending robot status...")
+        # if self.verbose:
+        #     self.get_logger().info("Sending robot status...")
         
         # Send robot status
         self._send_robot_status()
@@ -229,6 +229,7 @@ class KtServerClientSimNode(Node):
             rtk_status = self._last_rtk_status,
             autonomous_status = self._last_autonomous_status,
             drive_status = self._last_drive_status,
+            task_status= self._last_task_status
         )
         
     def _send_mission_info(self):
@@ -251,6 +252,9 @@ class KtServerClientSimNode(Node):
             msg.pose.pose.orientation.z,
             msg.pose.pose.orientation.w
         ]).as_euler('xyz', degrees=True)[2]
+        # self.get_logger().info(
+        #     f"Received Odometry: Speed={round(self._last_speed, 2)}, Heading={round(self._last_heading, 2)}"
+        # )
         
         
         

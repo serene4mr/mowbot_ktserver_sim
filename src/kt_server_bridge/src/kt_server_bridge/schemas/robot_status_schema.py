@@ -20,8 +20,8 @@ class AutonomousStatus(Enum):
     ACTIVE = "Active"
 
 class RTKStatus(Enum):
-    NORMAL = "Normal"
-    ERROR = "Error"
+    NORMAL = "normal"
+    ERROR = "error"
     
 #########################################################
 

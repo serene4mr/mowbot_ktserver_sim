@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import requests
 import pyproj
 from typing import Literal
@@ -106,12 +107,18 @@ class KTServerClient:
             self.get_access_token()
             
     def get_current_time_kst(self):
-        """Get the current time in KST format."""
-        # Get current UTC time as a timezone-aware object
-        now_utc = datetime.now(timezone.utc)
-        kst_timezone = timezone(timedelta(hours=9)) # Define KST timezone
-        now_kst = now_utc.astimezone(kst_timezone) # Convert to KST
-        return now_kst.strftime("%y%m%d%H%M%S%f")[:15] # Format as yyMMddHHmmssfff
+        """Get the current time in KST format: yyMMddHHmmssfff."""
+        kst_timezone = ZoneInfo("Asia/Seoul")
+        now_kst = datetime.now(kst_timezone)
+        return now_kst.strftime("%y%m%d%H%M%S%f")[:15]
+
+    def exclude_decimal(self, number):
+        """Exclude the decimal point from the string representation of a number."""
+        return f"{number}".replace(".", "")
+    
+    def mps_to_kmph(self, speed_mps: float) -> float:
+        """Convert speed from meters per second to kilometers per hour."""
+        return speed_mps * 3.6
             
     def send_robot_status(
         self,
@@ -124,20 +131,22 @@ class KTServerClient:
         task_status: TaskStatus = TaskStatus.STANDBY
     ):  
         self.check_and_refresh_token()  # Ensure token is valid before sending status
-        
         utm_easting, utm_northing = get_utm_coordinates(
             gps_location["lat"], gps_location["lon"]
         )
-        time_now = self.get_current_time_kst()
+        current_kst_time = self.get_current_time_kst()
+        speed_kmph = self.mps_to_kmph(speed)
+        # print(f"Speed in km/h: {int(round(speed_kmph))}")
+        # print(f"Heading: {int(round(heading))}")
         json_data = {
             "robot_serial": self.robot_serial,
-            "create_time": time_now,  # Current time in the required (KST)format
-            "x": utm_easting,
-            "y": utm_northing,
+            "create_time": current_kst_time,  # Current time in the required (KST)format
+            "x": gps_location["lon"], #utm_easting,
+            "y": gps_location["lat"], #utm_northing,
             "battery": 10, # fixed
-            "drive_status": drive_status,
-            "speed": int(speed), # Exclude decimal point in the result value.
-            "heading": int(heading), # Exclude decimal point in the result value.
+            "drive_status": drive_status.value,
+            "speed": int(round(speed_kmph)),  # Exclude decimal point in the result value.
+            "heading": int(round(heading)),  # Exclude decimal point in the result value.
             "charge": False,
             "charge_type": "None",
             "is_indoor": False,
@@ -145,8 +154,8 @@ class KTServerClient:
             "service_mode": "mowing",
             "service": {
                 "mowing": {
-                    "fuel": 10, # Add fuel sensors later.
-                    "autonomous_status": autonomous_status, # need an update on these 3 driving conditions.("Stopped": 사용불가(정지)"Standby": 준비완료(대기)"Active": 자율작업중(작업중))
+                    "fuel": 17.1, # Add fuel sensors later.
+                    "autonomous_status": autonomous_status.value, # need an update on these 3 driving conditions.("Stopped": 사용불가(정지)"Standby": 준비완료(대기)"Active": 자율작업중(작업중))
                     "cutter": {
                         "type": "rotary",
                         "width": 80
@@ -156,7 +165,7 @@ class KTServerClient:
                         "height": 5
                     },
                     "rtk": {
-                        "status": rtk_status, # Change "error" when there is no rtk signal
+                        "status": rtk_status.value, # Change "error" when there is no rtk signal
                         "error_range": 3
                     },
                     "rollangle": 30, # Enter the angle data of the IMU in real time.
@@ -164,12 +173,12 @@ class KTServerClient:
                 }
             },
             "task": {
-                "task_id": f"{self.robot_serial}-{time_now}0101",
+                "task_id": f"{self.robot_serial}-{current_kst_time}0101",
                 "task_code": "mowing",
-                "task_status": task_status
+                "task_status": task_status.value
             }
         }
-        
+        print(json_data)
         try: 
             response = requests.post(
                 self.robot_status_endpoint,  # Fixed URL with robot serial
@@ -215,6 +224,7 @@ class KTServerClient:
                     return False
 
         try:
+            current_kst_time = self.get_current_time_kst()
             response = requests.post(
                 self.service_status_endpoint, # Fixed URL with robot serial
                 headers= {
@@ -223,15 +233,15 @@ class KTServerClient:
                 },
                 json = {
                     "robot_serial": self.robot_serial,
-                    "create_time": datetime.now().strftime("%y%m%d%H%M%S%f")[:15],
+                    "create_time": current_kst_time,
                     "mission_code": "ktfarming",
-                    "mission_id": f"{self.robot_serial}-{datetime.now().strftime('%y%m%d%H%M%S%f')[:15]}",
+                    "mission_id": f"{self.robot_serial}-{current_kst_time}",
                     "owner": self.robot_serial,
                     "task": [
                         {
-                        "task_id": f"{self.robot_serial}-{datetime.now().strftime('%y%m%d%H%M%S%f')[:15]}0101",
+                        "task_id": f"{self.robot_serial}-{current_kst_time}0101",
                             "task_code": "mowing",
-                            "status": task_status,
+                            "status": task_status.value,
                             "seq": 0,
                             "task_data": {
                                 "map_id": "1", # When map registration is completed later, we will change the data ourselves and apply it. Need to apply the container later.
