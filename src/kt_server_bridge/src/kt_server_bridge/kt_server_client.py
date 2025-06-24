@@ -122,6 +122,7 @@ class KTServerClient:
             
     def send_robot_status(
         self,
+        task_id: str,
         gps_location: dict,
         speed: float,
         heading: float,
@@ -131,9 +132,9 @@ class KTServerClient:
         task_status: TaskStatus = TaskStatus.STANDBY
     ):  
         self.check_and_refresh_token()  # Ensure token is valid before sending status
-        utm_easting, utm_northing = get_utm_coordinates(
-            gps_location["lat"], gps_location["lon"]
-        )
+        # utm_easting, utm_northing = get_utm_coordinates(
+        #     gps_location["lat"], gps_location["lon"]
+        # )
         current_kst_time = self.get_current_time_kst()
         speed_kmph = self.mps_to_kmph(speed)
         # print(f"Speed in km/h: {int(round(speed_kmph))}")
@@ -173,7 +174,7 @@ class KTServerClient:
                 }
             },
             "task": {
-                "task_id": f"{self.robot_serial}-{current_kst_time}0101",
+                "task_id": f"{self.robot_serial}-{current_kst_time}{task_id}",
                 "task_code": "mowing",
                 "task_status": task_status.value
             }
@@ -206,6 +207,7 @@ class KTServerClient:
     
     def send_mission_info(
         self,
+        task_id: str,
         task_status: TaskStatus = TaskStatus.STANDBY,
         field_boundary: list[dict] = None,  # List of dicts with 'lat' and 'lon' keys
     ):
@@ -239,7 +241,7 @@ class KTServerClient:
                     "owner": self.robot_serial,
                     "task": [
                         {
-                        "task_id": f"{self.robot_serial}-{current_kst_time}0101",
+                        "task_id": f"{self.robot_serial}-{current_kst_time}{task_id}",
                             "task_code": "mowing",
                             "status": task_status.value,
                             "seq": 0,

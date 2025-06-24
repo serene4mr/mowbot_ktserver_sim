@@ -1,0 +1,20 @@
+/**:
+  kt_server_client_node:
+    ros__parameters:
+      robot_serial: "RSN800-0000"
+      client_id: "snsolutions"
+      client_secret: "QgvVztMwFggaC3Ds1nDCgIXec9P5Ca84"
+      report_hz: 1.0
+      verbose: true
+
+      demo_gnss_marker:
+        phase:
+          pre_manual: [36.114005953987785, 128.41844551680896] # at this phase, the robot is not moving, waiting for manual start
+          manual_started: [36.11400615610248, 128.41844355130064] # at this phase, the robot is moving, waiting for manual stop
+          manual_stopped: [36.11403369504778, 128.41834785466844] # at this phase, the robot is not moving, waiting for auto start
+          auto_started: [36.11403524490441, 128.4183341161192] # at this phase, the robot is moving, waiting for auto stop
+          auto_stopped: [36.114037052546394, 128.41826355116552] # at this phase, the robot is not moving, end of the demo
+        
+        field_boundary:
+          min: [36.114035673055845, 128.41830360303496] # first gnss wp
+          max: [36.1140370525463946, 128.41826355116552] # last gnss wp
