@@ -2,7 +2,6 @@ import rclpy
 from rclpy.node import Node
 import math
 from sensor_msgs.msg import NavSatFix, Imu, NavSatStatus
-from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from enum import Enum
 from scipy.spatial.transform import Rotation as R
@@ -16,34 +15,6 @@ from kt_server_bridge.schemas.robot_status_schema import (
 )
 from kt_server_bridge.schemas.common_schema import TaskStatus   
 
-
-# DEMO_PHASES = {
-#     "pre_manual": {
-#         "latitude": 36.114005953987785,
-#         "longitude": 128.41844551680896
-#     },
-#     "manual_started": {
-#         "latitude": 36.11400615610248,
-#         "longitude": 128.41844355130064
-#     },
-#     "manual_stopped": {
-#         "latitude": 36.11403369504778,
-#         "longitude": 128.41834785466844
-#     },
-#     "auto_started": {
-#         "latitude": 36.11403524490441,
-#         "longitude": 128.4183341161192
-#     },
-#     "auto_stopped": {
-#         "latitude": 36.114037052546394,
-#         "longitude": 128.41826355116552
-#     }
-# }
-
-# DEMO_FIELD_BOUNDARY = [
-#     {"lat": 36.114035673055845, "lon": 128.41830360303496},
-#     {"lat": 36.1140370525463946, "lon": 128.41826355116552},
-# ]
 
 class DemoPhases(Enum):
     PRE_MANUAL = "pre_manual"
@@ -64,12 +35,18 @@ class KtServerClientSimNode(Node):
         self.declare_parameter("report_hz", 1.0)
         self.declare_parameter("verbose", True)
         
+        # Demo GNSS marker phases
+        self.declare_parameter("demo_gnss_marker.phase.pre_manual", [36.114005953987785, 128.41844551680896])
+        self.declare_parameter("demo_gnss_marker.phase.manual_started", [36.11400615610248, 128.41844355130064])
+        self.declare_parameter("demo_gnss_marker.phase.manual_stopped", [36.11403369504778, 128.41834785466844])
+        self.declare_parameter("demo_gnss_marker.phase.auto_started", [36.11403524490441, 128.4183341161192])
+        self.declare_parameter("demo_gnss_marker.phase.auto_stopped", [36.114037052546394, 128.41826355116552])
         
         # Field boundary
-        self.declare_parameter("fb_min_lat", 36.114035673055845)
-        self.declare_parameter("fb_min_lon", 128.41830360303496)
-        self.declare_parameter("fb_max_lat", 36.1140370525463946)
-        self.declare_parameter("fb_max_lon", 128.41826355116552)
+        self.declare_parameter("demo_gnss_marker.field_boundary.min", [36.114035673055845, 128.41830360303496])
+        self.declare_parameter("demo_gnss_marker.field_boundary.max", [36.1140370525463946, 128.41826355116552])
+        
+        self.declare_parameter("demo_gnss_marker.tolerance", 0.05)  # tolerance for checking phase
         
         
         # Get parameters
@@ -78,12 +55,23 @@ class KtServerClientSimNode(Node):
         self.client_secret = self.get_parameter("client_secret").get_parameter_value().string_value
         self.report_hz = self.get_parameter("report_hz").get_parameter_value().double_value
         self.verbose = self.get_parameter("verbose").get_parameter_value().bool_value
+        
+        self.demo_phases = {
+            "pre_manual": self.get_parameter("demo_gnss_marker.phase.pre_manual").value,
+            "manual_started": self.get_parameter("demo_gnss_marker.phase.manual_started").value,
+            "manual_stopped": self.get_parameter("demo_gnss_marker.phase.manual_stopped").value,
+            "auto_started": self.get_parameter("demo_gnss_marker.phase.auto_started").value,
+            "auto_stopped": self.get_parameter("demo_gnss_marker.phase.auto_stopped").value,
+        }
 
         self.field_boundary = [
-            {"lat": self.get_parameter("fb_min_lat").get_parameter_value().double_value, "lon": self.get_parameter("fb_min_lon").get_parameter_value().double_value},
-            {"lat": self.get_parameter("fb_max_lat").get_parameter_value().double_value, "lon": self.get_parameter("fb_max_lon").get_parameter_value().double_value}
+            {"lat": self.get_parameter("demo_gnss_marker.field_boundary.min").value[0], "lon": self.get_parameter("demo_gnss_marker.field_boundary.min").value[1]},
+            {"lat": self.get_parameter("demo_gnss_marker.field_boundary.max").value[0], "lon": self.get_parameter("demo_gnss_marker.field_boundary.max").value[1]}
         ]
         
+        self.tolerance = self.get_parameter("demo_gnss_marker.tolerance").get_parameter_value().double_value
+        
+        self.get_logger().info(f"demo_phases: {self.demo_phases}")
         self.get_logger().info(f"field_boundary: {self.field_boundary}")
 
         # Create kt_server_client
@@ -109,10 +97,6 @@ class KtServerClientSimNode(Node):
             Odometry,
             "/odom", self.on_odom_callback, 10
         )
-        self.phase_sub = self.create_subscription(
-            String,
-            "/demo_phase", self.on_phase_callback, 10
-        )
         
         self._last_gps = None
         self._last_heading = None
@@ -135,24 +119,41 @@ class KtServerClientSimNode(Node):
         self._send_robot_status()
         self._send_mission_info()
 
+    def _haversine_distance(self, lat1, lon1, lat2, lon2):
+        """Calculate distance between two GPS points in meters using Haversine formula."""
+        R = 6371000  # Earth radius in meters
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        return R * c
+        
+    def _check_phase(self, lat1, lon1, lat2, lon2, tolerance=0.05):
+        """Check if two GPS points are within a certain tolerance."""
+        distance = self._haversine_distance(lat1, lon1, lat2, lon2)
+        return distance < tolerance
+        
+        
     def on_gps_callback(self, msg: NavSatFix):
         # if self.verbose:
         #     self.get_logger().info(f"Received GPS: {msg.latitude}, {msg.longitude}, {msg.altitude}")
         
         self._last_gps = {"lat": msg.latitude, "lon": msg.longitude}
-        
-    
-    def on_phase_callback(self, msg: String):
-        if self.verbose:
-            self.get_logger().info(f"Received phase: {msg.data}")
-        
-        if self.current_phase == msg.data:
-            # No change in phase
-            return
-        else:
-            self.current_phase = msg.data
-        
-        if self.current_phase == DemoPhases.PRE_MANUAL.value:
+            
+        # if msg.latitude == self.demo_phases["pre_manual"][0] \
+        #     and msg.longitude == self.demo_phases["pre_manual"][1]:
+        if self._check_phase(
+            msg.latitude, msg.longitude,
+            self.demo_phases["pre_manual"][0], self.demo_phases["pre_manual"][1],
+            tolerance=self.tolerance
+        ):
+            if self.current_phase != DemoPhases.PRE_MANUAL:
+                self.current_phase = DemoPhases.PRE_MANUAL
+            else:
+                return
             
             self.get_logger().info("Demo phase: pre-manual")
             
@@ -165,7 +166,16 @@ class KtServerClientSimNode(Node):
             self._send_mission_info()
 
             
-        elif self.current_phase == DemoPhases.MANUAL_STARTED.value:
+        # elif msg.latitude == self.demo_phases["manual_started"][0] \
+        #     and msg.longitude == self.demo_phases["manual_started"][1]:
+        elif self._check_phase(
+            msg.latitude, msg.longitude,
+            self.demo_phases["manual_started"][0], self.demo_phases["manual_started"][1]
+        ):
+            if self.current_phase != DemoPhases.MANUAL_STARTED:
+                self.current_phase = DemoPhases.MANUAL_STARTED
+            else:
+                return
             
             self.get_logger().info("Demo phase: manual-started")
             
@@ -175,7 +185,16 @@ class KtServerClientSimNode(Node):
             self._last_autonomous_status = AutonomousStatus.STOPPED
             self._send_robot_status()
             
-        elif self.current_phase == DemoPhases.MANUAL_STOPPED.value:
+        # elif msg.latitude == self.demo_phases["manual_stopped"][0] \
+        #     and msg.longitude == self.demo_phases["manual_stopped"][1]:
+        elif self._check_phase(
+            msg.latitude, msg.longitude,
+            self.demo_phases["manual_stopped"][0], self.demo_phases["manual_stopped"][1]
+        ):
+            if self.current_phase != DemoPhases.MANUAL_STOPPED:
+                self.current_phase = DemoPhases.MANUAL_STOPPED
+            else:
+                return
             
             self.get_logger().info("Demo phase: manual-stopped")
             
@@ -188,7 +207,16 @@ class KtServerClientSimNode(Node):
             self._send_mission_info()
             
             
-        elif self.current_phase == DemoPhases.AUTO_STARTED.value:
+        # elif msg.latitude == self.demo_phases["auto_started"][0] \
+        #     and msg.longitude == self.demo_phases["auto_started"][1]:
+        elif self._check_phase(
+            msg.latitude, msg.longitude,
+            self.demo_phases["auto_started"][0], self.demo_phases["auto_started"][1]
+        ):
+            if self.current_phase != DemoPhases.AUTO_STARTED:
+                self.current_phase = DemoPhases.AUTO_STARTED
+            else:
+                return
             
             self.get_logger().info("Demo phase: auto-started")
             
@@ -209,7 +237,16 @@ class KtServerClientSimNode(Node):
             self._send_mission_info()
             
             
-        elif self.current_phase == DemoPhases.AUTO_STOPPED.value:
+        # elif msg.latitude == self.demo_phases["auto_stopped"][0] \
+        #     and msg.longitude == self.demo_phases["auto_stopped"][1]:
+        elif self._check_phase(
+            msg.latitude, msg.longitude,
+            self.demo_phases["auto_stopped"][0], self.demo_phases["auto_stopped"][1]
+        ):
+            if self.current_phase != DemoPhases.AUTO_STOPPED:
+                self.current_phase = DemoPhases.AUTO_STOPPED
+            else:
+                return
             
             self.get_logger().info("Demo phase: auto-stopped")
             
@@ -239,12 +276,21 @@ class KtServerClientSimNode(Node):
             
             
     def _check_data_validity(self):
-        if self._last_gps is None or \
-           self._last_heading is None or \
-           self._last_speed is None:
+        if self._last_gps is None:
             if self.verbose:
-                self.get_logger().warn("Data not valid, skipping sending status.")
+                self.get_logger().warn("No GPS data received yet.")
             return False
+        
+        if self._last_speed is None:
+            if self.verbose:
+                self.get_logger().warn("No speed data received yet.")
+            return False
+        
+        if self._last_heading is None:
+            if self.verbose:
+                self.get_logger().warn("No heading data received yet.")
+            return False
+        
         return True
             
     def _send_robot_status(self):

@@ -27,6 +27,7 @@ setup(
         'console_scripts': [
             "kt_server_client_node = kt_server_bridge.kt_server_client_node:main",
             "kt_server_client_sim_node = kt_server_bridge.kt_server_client_sim_node:main",
+            "kt_phase_trigger_node = kt_server_bridge.kt_phase_trigger_node:main",
         ],
     },
 )
