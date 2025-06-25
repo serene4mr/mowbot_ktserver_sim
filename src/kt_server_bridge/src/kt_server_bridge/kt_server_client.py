@@ -179,7 +179,7 @@ class KTServerClient:
                 "task_status": task_status.value
             }
         }
-        print(json_data)
+        # print(json_data)
         try: 
             response = requests.post(
                 self.robot_status_endpoint,  # Fixed URL with robot serial

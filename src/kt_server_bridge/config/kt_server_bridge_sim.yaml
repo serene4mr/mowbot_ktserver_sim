@@ -6,8 +6,9 @@
       client_secret: "QgvVztMwFggaC3Ds1nDCgIXec9P5Ca84"
       report_hz: 1.0
       verbose: true
-
+      
       demo_gnss_marker:
+        tolerance: 0.01 # tolerance for gnss marker, in meters
         phase:
           pre_manual: [36.114005953987785, 128.41844551680896] # at this phase, the robot is not moving, waiting for manual start
           manual_started: [36.11400615610248, 128.41844355130064] # at this phase, the robot is moving, waiting for manual stop

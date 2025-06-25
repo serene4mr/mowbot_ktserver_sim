@@ -74,6 +74,8 @@ class KtServerClientSimNode(Node):
         self.declare_parameter("demo_gnss_marker.field_boundary.min", [36.114035673055845, 128.41830360303496])
         self.declare_parameter("demo_gnss_marker.field_boundary.max", [36.1140370525463946, 128.41826355116552])
         
+        self.declare_parameter("demo_gnss_marker.tolerance", 0.05)  # tolerance for checking phase
+        
         
         # Get parameters
         self.robot_serial = self.get_parameter("robot_serial").get_parameter_value().string_value
@@ -94,6 +96,8 @@ class KtServerClientSimNode(Node):
             {"lat": self.get_parameter("demo_gnss_marker.field_boundary.min").value[0], "lon": self.get_parameter("demo_gnss_marker.field_boundary.min").value[1]},
             {"lat": self.get_parameter("demo_gnss_marker.field_boundary.max").value[0], "lon": self.get_parameter("demo_gnss_marker.field_boundary.max").value[1]}
         ]
+        
+        self.tolerance = self.get_parameter("demo_gnss_marker.tolerance").get_parameter_value().double_value
         
         self.get_logger().info(f"demo_phases: {self.demo_phases}")
         self.get_logger().info(f"field_boundary: {self.field_boundary}")
@@ -171,7 +175,8 @@ class KtServerClientSimNode(Node):
         #     and msg.longitude == self.demo_phases["pre_manual"][1]:
         if self._check_phase(
             msg.latitude, msg.longitude,
-            self.demo_phases["pre_manual"][0], self.demo_phases["pre_manual"][1]
+            self.demo_phases["pre_manual"][0], self.demo_phases["pre_manual"][1],
+            tolerance=self.tolerance
         ):
             if self.current_phase != DemoPhases.PRE_MANUAL:
                 self.current_phase = DemoPhases.PRE_MANUAL
