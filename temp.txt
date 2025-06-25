@@ -1,0 +1,7 @@
+ros2 launch kt_server_bridge kt_server_client_sim_node.launch.py \
+	fb_min_lat:=0.0 fb_min_lon:=0.0 \
+	fb_max_lat:=0.0 fb_max_lon:=0.0
+
+ros2 launch kt_server_bridge kt_server_client_sim_node.launch.py \
+	fb_min_lat:=36.114035673055845 fb_min_lon:=128.41830360303496 \
+	fb_max_lat:=36.1140370525463946 fb_max_lon:=128.41826355116552
