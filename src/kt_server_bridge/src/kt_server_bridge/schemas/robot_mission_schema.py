@@ -23,18 +23,18 @@ class Report(BaseModel):
     distance: float
     area: float
 
-class TaskData(BaseModel):
+class MTaskData(BaseModel):
     map_id: int
     report: Report
     attachment: Attachment
     field_boundary: List[Point]
 
-class Task(BaseModel):
+class MTask(BaseModel):
     task_id: str
     task_code: str
     status: TaskStatus
     seq: int
-    task_data: TaskData
+    task_data: MTaskData
 
 class RobotMission(BaseModel):
     robot_serial: str
@@ -42,4 +42,5 @@ class RobotMission(BaseModel):
     mission_code: str
     mission_id: str
     owner: str
-    task: List[Task]
+    task: List[MTask]
+    

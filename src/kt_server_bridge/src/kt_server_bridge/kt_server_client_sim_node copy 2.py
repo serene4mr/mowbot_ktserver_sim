@@ -111,6 +111,9 @@ class KtServerClientSimNode(Node):
         self._last_field_boundary = []
         self.current_phase: DemoPhases = None
         
+        self._last_mission_id = None
+        self._last_task_id = None
+        
     def on_report_timer_callback(self):
         # if self.verbose:
         #     self.get_logger().info("Sending robot status...")
@@ -299,7 +302,6 @@ class KtServerClientSimNode(Node):
             return
         
         self.kt_server_client.send_robot_status(
-            task_id = "01",
             gps_location = {"lat": self._last_gps["lat"], "lon": self._last_gps["lon"]},
             speed = self._last_speed,
             heading = self._last_heading,
@@ -314,7 +316,6 @@ class KtServerClientSimNode(Node):
             return
         
         self.kt_server_client.send_mission_info(
-            task_id="01",
             task_status = self._last_task_status,
             field_boundary = self._last_field_boundary
         )

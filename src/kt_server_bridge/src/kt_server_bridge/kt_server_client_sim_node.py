@@ -127,6 +127,10 @@ class KtServerClientSimNode(Node):
         self._last_field_boundary = []
         self.current_phase: DemoPhases = None
         
+        # assume mission and task already created
+        self._last_field_boundary = self.field_boundary
+        self.kt_server_client.demo_start_new_mission_and_task()
+        
     def on_report_timer_callback(self):
         # if self.verbose:
         #     self.get_logger().info("Sending robot status...")
@@ -159,9 +163,9 @@ class KtServerClientSimNode(Node):
             # initial state when starting demo
             self._last_drive_status = DrivingStatus.STANDBY
             self._last_task_status = TaskStatus.STANDBY
-            self._last_autonomous_status = AutonomousStatus.STANDBY
+            self._last_autonomous_status = AutonomousStatus.STANDBY    
+            
             self._send_robot_status()
-            self._last_field_boundary = []
             self._send_mission_info()
 
             
@@ -184,7 +188,6 @@ class KtServerClientSimNode(Node):
             self._last_task_status = TaskStatus.STANDBY
             self._last_autonomous_status = AutonomousStatus.STANDBY
             self._send_robot_status()
-            self._last_field_boundary = []
             self._send_mission_info()
             
             
@@ -197,7 +200,6 @@ class KtServerClientSimNode(Node):
             self._last_task_status = TaskStatus.STARTED
             self._last_autonomous_status = AutonomousStatus.STANDBY
             self._send_robot_status()
-            self._last_field_boundary = self.field_boundary
             self._send_mission_info()
             
             # on-going autonomous driving
@@ -205,7 +207,6 @@ class KtServerClientSimNode(Node):
             self._last_task_status = TaskStatus.ON_PROGRESS
             self._last_autonomous_status = AutonomousStatus.ACTIVE
             self._send_robot_status()
-            self._last_field_boundary = self.field_boundary
             self._send_mission_info()
             
             
@@ -218,7 +219,6 @@ class KtServerClientSimNode(Node):
             self._last_task_status = TaskStatus.DEST_ARRIVED
             self._last_autonomous_status = AutonomousStatus.ACTIVE
             self._send_robot_status()
-            self._last_field_boundary = self.field_boundary
             self._send_mission_info()
             
             # conclude task
@@ -226,15 +226,18 @@ class KtServerClientSimNode(Node):
             self._last_task_status = TaskStatus.END
             self._last_autonomous_status = AutonomousStatus.STOPPED
             self._send_robot_status()
-            self._last_field_boundary = self.field_boundary
             self._send_mission_info()
             
             # reset to end demo
             self._last_drive_status = DrivingStatus.STANDBY
             self._last_task_status = TaskStatus.STANDBY
             self._last_autonomous_status = AutonomousStatus.STANDBY
+            
+            # assume new mission and task created again at the end of demo
+            self._last_field_boundary = self.field_boundary
+            self.kt_server_client.demo_start_new_mission_and_task()
+            
             self._send_robot_status()
-            self._last_field_boundary = []
             self._send_mission_info()
             
             

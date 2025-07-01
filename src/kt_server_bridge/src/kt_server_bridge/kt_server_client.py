@@ -11,6 +11,7 @@ from kt_server_bridge.schemas.robot_status_schema import (
     AutonomousStatus,
     RTKStatus,
 )
+
 from kt_server_bridge.schemas.common_schema import (
     TaskStatus,
 )
@@ -56,6 +57,9 @@ class KTServerClient:
         self.robot_status_endpoint = f"{KT_SERVER_API_BASE_URL}/robots/{self.robot_serial}/robot-status"
         self.service_status_endpoint = f"{KT_SERVER_API_BASE_URL}/robots/{self.robot_serial}/service-status"
         self.error_status_endpoint = f"{KT_SERVER_API_BASE_URL}/robots/{self.robot_serial}/error-status"
+        
+        self.mission_id = None  # Store the current mission ID
+        self.task_id = None  # Store the current task ID
         
 
     def log_info(self, msg):
@@ -122,7 +126,6 @@ class KTServerClient:
             
     def send_robot_status(
         self,
-        task_id: str,
         gps_location: dict,
         speed: float,
         heading: float,
@@ -137,8 +140,7 @@ class KTServerClient:
         # )
         current_kst_time = self.get_current_time_kst()
         speed_kmph = self.mps_to_kmph(speed)
-        # print(f"Speed in km/h: {int(round(speed_kmph))}")
-        # print(f"Heading: {int(round(heading))}")
+        
         json_data = {
             "robot_serial": self.robot_serial,
             "create_time": current_kst_time,  # Current time in the required (KST)format
@@ -174,10 +176,10 @@ class KTServerClient:
                 }
             },
             "task": {
-                "task_id": f"{self.robot_serial}-{current_kst_time}{task_id}",
+                "task_id": self.task_id,  # Unique task ID for the robot
                 "task_code": "mowing",
                 "task_status": task_status.value
-            }
+            } if self.task_id else {}
         }
         # print(json_data)
         try: 
@@ -207,11 +209,15 @@ class KTServerClient:
     
     def send_mission_info(
         self,
-        task_id: str,
         task_status: TaskStatus = TaskStatus.STANDBY,
         field_boundary: list[dict] = None,  # List of dicts with 'lat' and 'lon' keys
     ):
         self.check_and_refresh_token()
+        
+        if not self.mission_id or not self.task_id: 
+            if self.verbose:
+                self.log_error("Mission ID and Task ID must be set before sending mission info.")
+            return False
         
         # convert field_boundary coordinates to UTM if provided
         if field_boundary:
@@ -237,11 +243,11 @@ class KTServerClient:
                     "robot_serial": self.robot_serial,
                     "create_time": current_kst_time,
                     "mission_code": "ktfarming",
-                    "mission_id": f"{self.robot_serial}-{current_kst_time}",
+                    "mission_id": self.mission_id,  # Unique mission ID for the robot
                     "owner": self.robot_serial,
                     "task": [
                         {
-                        "task_id": f"{self.robot_serial}-{current_kst_time}{task_id}",
+                        "task_id": self.task_id,
                             "task_code": "mowing",
                             "status": task_status.value,
                             "seq": 0,
@@ -283,6 +289,27 @@ class KTServerClient:
             return False
         
         return True
+    
+    def demo_start_new_mission_and_task(self):
+        """
+        Start a new mission and task with unique IDs based on the current time.
+        Just a template function for demo.
+        """
+        self.mission_id = f"{self.robot_serial}-{self.get_current_time_kst()}"
+        self.task_id = f"{self.robot_serial}-{self.get_current_time_kst()}01"
+        
+    def demo_end_current_mission_and_task(self):
+        """
+        End the current mission and task.
+        This is a template function for demo.
+        """
+        if self.mission_id and self.task_id:
+            self.log_info(f"Ending mission {self.mission_id} and task {self.task_id}.")
+            # Reset IDs after ending
+            self.mission_id = None
+            self.task_id = None
+        else:
+            self.log_error("No active mission or task to end.")
 
 
 def main():
