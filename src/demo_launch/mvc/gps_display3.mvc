@@ -1,5 +1,3 @@
-# Mapviz configuration modified to use a Google Maps proxy source.
-
 capture_directory: "~"
 fixed_frame: map
 target_frame: map
@@ -18,22 +16,15 @@ use_latest_transforms: true
 background: "#a0a0a4"
 image_transport: raw
 displays:
-  # This section has been modified for the Google Maps proxy.
   - type: mapviz_plugins/tile_map
-    name: Google Maps Proxy
+    name: new display
     config:
       visible: true
       collapsed: false
-      # Define the custom source for the Google Maps proxy.
-      # This assumes your proxy is running on localhost:8080.
       custom_sources:
-        - name: Google Maps Proxy
-          base_url: http://localhost:8080/wmts/gm_layer/gm_grid/{level}/{x}/{y}.png
-          max_zoom: 19
-          min_zoom: 0
-      bing_api_key: "" # Bing API key is no longer needed.
-      source: Custom # Set the source to "Custom" to use the definition above.
-  # The rest of the displays remain unchanged.
+        []
+      bing_api_key: AkCDUXwYzM3w36XYcNeT0kNOFhpTiQuwluXkQlFBs1WhFbknP2_2iDBXeL_WzXCc
+      source: Bing Maps (terrain)
   - type: mapviz_plugins/tf_frame
     name: new display
     config:

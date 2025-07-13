@@ -233,46 +233,47 @@ class KTServerClient:
 
         try:
             current_kst_time = self.get_current_time_kst()
+            json_body = {
+                "robot_serial": self.robot_serial,
+                "create_time": current_kst_time,
+                "mission_code": "ktfarming",
+                "mission_id": self.mission_id,  # Unique mission ID for the robot
+                "owner": self.robot_serial,
+                "task": [
+                    {
+                    "task_id": self.task_id,
+                        "task_code": "mowing",
+                        "status": task_status.value,
+                        "seq": 0,
+                        "task_data": {
+                            "map_id": "1", # When map registration is completed later, we will change the data ourselves and apply it. Need to apply the container later.
+                            "report": {
+                                "time": 300, # Total work time (sec)
+                                "distance": 15.0, # Total distance traveled between tasks (m)
+                                "area": 225.0 # Total working area (m^2)
+                            },
+                            "attachment": {
+                                "cutter": {
+                                    "type": "rotary",
+                                    "width": 80.0
+                                },
+                                "lift": {
+                                    "status": "down",
+                                    "height": 5.0
+                                }
+                            },
+                            "field_boundary": field_boundary if field_boundary else [],
+                        }
+                    }
+                ]
+            }
             response = requests.post(
                 self.service_status_endpoint, # Fixed URL with robot serial
                 headers= {
                     "Authorization": f"Bearer {self.access_token}",
                     "Content-Type": "application/json"
                 },
-                json = {
-                    "robot_serial": self.robot_serial,
-                    "create_time": current_kst_time,
-                    "mission_code": "ktfarming",
-                    "mission_id": self.mission_id,  # Unique mission ID for the robot
-                    "owner": self.robot_serial,
-                    "task": [
-                        {
-                        "task_id": self.task_id,
-                            "task_code": "mowing",
-                            "status": task_status.value,
-                            "seq": 0,
-                            "task_data": {
-                                "map_id": "1", # When map registration is completed later, we will change the data ourselves and apply it. Need to apply the container later.
-                                "report": {
-                                    "time": 300, # Total work time (sec)
-                                    "distance": 15.0, # Total distance traveled between tasks (m)
-                                    "area": 225.0 # Total working area (m^2)
-                                },
-                                "attachment": {
-                                    "cutter": {
-                                        "type": "rotary",
-                                        "width": 80.0
-                                    },
-                                    "lift": {
-                                        "status": "down",
-                                        "height": 5.0
-                                    }
-                                },
-                                "field_boundary": field_boundary if field_boundary else [],
-                            }
-                        }
-                    ]
-                }
+                json = json_body
             )       
 
             if response.status_code == 200:

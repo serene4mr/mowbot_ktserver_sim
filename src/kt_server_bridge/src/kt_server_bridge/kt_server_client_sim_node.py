@@ -137,7 +137,7 @@ class KtServerClientSimNode(Node):
         
         # Send robot status
         self._send_robot_status()
-        self._send_mission_info()
+        # self._send_mission_info()
 
     def on_gps_callback(self, msg: NavSatFix):
         # if self.verbose:
@@ -268,6 +268,8 @@ class KtServerClientSimNode(Node):
     def _send_mission_info(self):
         if not self._check_data_validity():
             return
+        
+        self.get_logger().info(f"MissionID: {self.kt_server_client.mission_id}, TaskID: {self.kt_server_client.task_id}")
         
         self.kt_server_client.send_mission_info(
             task_status = self._last_task_status,
